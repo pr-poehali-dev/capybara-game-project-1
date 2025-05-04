@@ -10,11 +10,19 @@ import { Badge } from '@/components/ui/badge';
 import BattleArena from '@/components/BattleArena';
 
 // Типы для нашего приложения
+type AbilityEffect = {
+  type: 'damage' | 'dot' | 'stun' | 'heal' | 'buff' | 'debuff' | 'aoe';
+  value: number;
+  duration?: number;
+};
+
 type Ability = {
   name: string;
   description: string;
-  type: 'attack' | 'defense' | 'support';
+  type: 'attack' | 'defense' | 'support' | 'ultimate';
   element?: string;
+  effect?: AbilityEffect;
+  cooldown?: number;
 };
 
 type Character = {
@@ -52,6 +60,44 @@ const capibaraAvatars = [
     description: 'Маленькая капибара на пне'
   }
 ];
+
+// Функция для генерации эффекта способности на основе класса и стихии
+const generateAbilityEffect = (type: string, element: string): AbilityEffect | undefined => {
+  const typeLower = type.toLowerCase();
+  const elementLower = element.toLowerCase();
+  
+  // Стандартные эффекты для типов
+  const typeEffects: Record<string, Partial<AbilityEffect>> = {
+    'attack': { type: 'damage', value: Math.floor(Math.random() * 15) + 15 },
+    'defense': { type: 'buff', value: Math.floor(Math.random() * 20) + 10, duration: 2 },
+    'support': { type: 'heal', value: Math.floor(Math.random() * 10) + 10 }
+  };
+  
+  // Эффекты, связанные со стихией
+  const elementEffects: Record<string, Partial<AbilityEffect>> = {
+    'огонь': { type: 'dot', value: Math.floor(Math.random() * 8) + 5, duration: 3 },
+    'вода': { type: 'stun', value: Math.floor(Math.random() * 5) + 3, duration: 1 },
+    'земля': { type: 'debuff', value: Math.floor(Math.random() * 15) + 10, duration: 2 },
+    'воздух': { type: 'aoe', value: Math.floor(Math.random() * 12) + 8 },
+    'молния': { type: 'stun', value: Math.floor(Math.random() * 10) + 5, duration: 2 },
+    'тьма': { type: 'debuff', value: Math.floor(Math.random() * 20) + 15, duration: 2 },
+    'свет': { type: 'heal', value: Math.floor(Math.random() * 15) + 10 },
+    'природа': { type: 'dot', value: Math.floor(Math.random() * 6) + 4, duration: 4 }
+  };
+  
+  // Определяем базовый эффект на основе типа способности
+  const baseEffect = typeEffects[typeLower] || { type: 'damage', value: Math.floor(Math.random() * 10) + 10 };
+  
+  // Для атакующих способностей смешиваем со стихийным эффектом
+  if (typeLower === 'attack' && elementEffects[elementLower]) {
+    // 50% шанс получить стихийный эффект вместо обычного
+    return Math.random() > 0.5 
+      ? { ...elementEffects[elementLower] as AbilityEffect }
+      : { ...baseEffect as AbilityEffect };
+  }
+  
+  return { ...baseEffect as AbilityEffect };
+};
 
 // Функция для генерации способностей на основе класса и стихии
 const generateAbilities = (characterClass: string, element: string): Ability[] => {
@@ -132,12 +178,17 @@ const generateAbilities = (characterClass: string, element: string): Ability[] =
     
     const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
     const action = actions[Math.floor(Math.random() * actions.length)];
+    const abilityType = Math.random() > 0.6 ? 'attack' : (Math.random() > 0.5 ? 'defense' : 'support');
+    
+    // Создаем эффект
+    const effect = generateAbilityEffect(abilityType, element);
     
     return {
       name: `${adj.charAt(0).toUpperCase() + adj.slice(1)} ${action} ${element}`,
       description: `Уникальная техника ${characterClass}, объединяющая силу ${element} с мастерством владельца`,
-      type: Math.random() > 0.6 ? 'attack' : (Math.random() > 0.5 ? 'defense' : 'support'),
-      element: elementLower
+      type: abilityType as 'attack' | 'defense' | 'support',
+      element: elementLower,
+      effect
     };
   };
   
@@ -152,14 +203,18 @@ const generateAbilities = (characterClass: string, element: string): Ability[] =
     ];
   }
   
-  // Добавляем базовые способности класса
+  // Добавляем базовые способности класса с эффектами
   for (const abilityData of classAbilitiesList) {
+    const abilityType = abilityData.type as 'attack' | 'defense' | 'support';
+    const effect = generateAbilityEffect(abilityType, element);
+    
     abilities.push({
       ...abilityData,
       element: elementLower,
       name: abilityData.name || '',
       description: abilityData.description || '',
-      type: abilityData.type as 'attack' | 'defense' | 'support',
+      type: abilityType,
+      effect
     });
   }
   
@@ -174,12 +229,16 @@ const generateAbilities = (characterClass: string, element: string): Ability[] =
   }
   
   for (const abilityData of elementAbilitiesList) {
+    const abilityType = abilityData.type as 'attack' | 'defense' | 'support';
+    const effect = generateAbilityEffect(abilityType, element);
+    
     abilities.push({
       ...abilityData,
       element: elementLower,
       name: abilityData.name || '',
       description: abilityData.description || '',
-      type: abilityData.type as 'attack' | 'defense' | 'support',
+      type: abilityType,
+      effect
     });
   }
   
@@ -423,6 +482,25 @@ const CharacterCreator = () => {
                           </Badge>
                         </div>
                         <p className="text-gray-700">{ability.description}</p>
+                        {ability.effect && (
+                          <div className="mt-2 text-sm">
+                            <Badge variant="outline" className="border-amber-300">
+                              Эффект: {ability.effect.type === 'damage' ? 'Урон' : 
+                                      ability.effect.type === 'dot' ? 'Урон по времени' :
+                                      ability.effect.type === 'stun' ? 'Оглушение' :
+                                      ability.effect.type === 'heal' ? 'Лечение' :
+                                      ability.effect.type === 'buff' ? 'Усиление' :
+                                      ability.effect.type === 'debuff' ? 'Ослабление' :
+                                      ability.effect.type === 'aoe' ? 'Урон по площади' : 'Неизвестно'}
+                            </Badge>
+                            {ability.effect.value && (
+                              <span className="text-amber-700 ml-2">
+                                Сила: {ability.effect.value}
+                                {ability.effect.duration ? `, Длительность: ${ability.effect.duration} ходов` : ''}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {ability.element && (
                           <Badge variant="outline" className="mt-2 border-amber-300">
                             Стихия: {ability.element}
