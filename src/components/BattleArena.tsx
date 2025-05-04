@@ -3,13 +3,24 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 
 // Типы для компонентов
+type Ability = {
+  name: string;
+  description: string;
+  type: 'attack' | 'defense' | 'support';
+  element?: string;
+};
+
 type Character = {
   name: string;
   race: string;
+  class: string;
+  element: string;
   description: string;
   avatarUrl: string;
+  abilities: Ability[];
 };
 
 type Monster = {
@@ -38,9 +49,36 @@ const BattleArena = ({ character, monster, onReset }: BattleArenaProps) => {
     { id: 1, text: `Битва началась! ${character.name} против ${monster.name}!`, isPlayerAction: false }
   ]);
   const [isMonsterDefeated, setIsMonsterDefeated] = useState(false);
+  const [selectedAbility, setSelectedAbility] = useState<Ability | null>(null);
   
   const attackMonster = () => {
-    const damage = Math.floor(Math.random() * 20) + 10; // от 10 до 30 урона
+    if (!selectedAbility) {
+      setBattleLogs(prev => [
+        ...prev, 
+        { 
+          id: Date.now(), 
+          text: `Выберите способность для атаки!`, 
+          isPlayerAction: false 
+        }
+      ]);
+      return;
+    }
+    
+    let damage = 0;
+    let logText = '';
+    
+    // Различный урон в зависимости от типа способности
+    if (selectedAbility.type === 'attack') {
+      damage = Math.floor(Math.random() * 20) + 15; // от 15 до 35 урона
+      logText = `${character.name} использует ${selectedAbility.name} и наносит ${damage} урона!`;
+    } else if (selectedAbility.type === 'defense') {
+      damage = Math.floor(Math.random() * 10) + 5; // от 5 до 15 урона
+      logText = `${character.name} применяет ${selectedAbility.name}, защищаясь и нанося ${damage} урона!`;
+    } else {
+      damage = Math.floor(Math.random() * 5) + 5; // от 5 до 10 урона
+      logText = `${character.name} использует поддерживающую способность ${selectedAbility.name} и наносит ${damage} урона!`;
+    }
+    
     const newHp = Math.max(0, currentMonster.hp - damage);
     
     // Добавляем лог атаки
@@ -48,7 +86,7 @@ const BattleArena = ({ character, monster, onReset }: BattleArenaProps) => {
       ...prev, 
       { 
         id: Date.now(), 
-        text: `${character.name} атакует ${currentMonster.name} и наносит ${damage} урона!`, 
+        text: logText, 
         isPlayerAction: true 
       }
     ]);
@@ -58,6 +96,9 @@ const BattleArena = ({ character, monster, onReset }: BattleArenaProps) => {
       ...prev,
       hp: newHp
     }));
+    
+    // Сбрасываем выбранную способность
+    setSelectedAbility(null);
     
     // Проверяем, победили ли монстра
     if (newHp === 0) {
@@ -106,7 +147,14 @@ const BattleArena = ({ character, monster, onReset }: BattleArenaProps) => {
           <CardHeader className="bg-amber-100">
             <CardTitle className="flex justify-between items-center">
               <span>{character.name}</span>
-              <span className="text-sm font-normal">Раса: {character.race}</span>
+              <div className="flex gap-2">
+                <Badge variant="outline" className="border-amber-500">
+                  {character.race}
+                </Badge>
+                <Badge variant="secondary" className="bg-amber-300">
+                  {character.class}
+                </Badge>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 flex flex-col items-center">
@@ -126,12 +174,45 @@ const BattleArena = ({ character, monster, onReset }: BattleArenaProps) => {
               )}
             </div>
             <p className="text-center italic">{character.description || 'Непобедимый герой!'}</p>
+            <Badge className="mt-2 bg-gradient-to-r from-amber-400 to-amber-600">
+              Стихия: {character.element}
+            </Badge>
+            
             <div className="mt-4 w-full">
               <div className="flex justify-between mb-1">
                 <span className="font-bold text-amber-700">HP</span>
                 <span className="text-amber-700">∞</span>
               </div>
               <Progress value={100} className="h-2 bg-amber-100" indicatorClassName="bg-gradient-to-r from-amber-400 to-amber-600" />
+            </div>
+            
+            {/* Способности персонажа */}
+            <div className="mt-4 w-full">
+              <h3 className="font-bold text-amber-800 mb-2">Способности</h3>
+              <div className="grid grid-cols-1 gap-2">
+                {character.abilities.map((ability, index) => (
+                  <div 
+                    key={index}
+                    className={`p-2 rounded-lg border cursor-pointer transition-all
+                      ${selectedAbility === ability 
+                        ? 'border-amber-500 bg-amber-50 shadow' 
+                        : 'border-gray-200 hover:border-amber-300'}`}
+                    onClick={() => setSelectedAbility(ability)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">{ability.name}</span>
+                      <Badge className={
+                        ability.type === 'attack' ? 'bg-red-500' : 
+                        ability.type === 'defense' ? 'bg-blue-500' : 'bg-green-500'
+                      }>
+                        {ability.type === 'attack' ? 'Атака' : 
+                         ability.type === 'defense' ? 'Защита' : 'Поддержка'}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 mt-1">{ability.description}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -209,8 +290,11 @@ const BattleArena = ({ character, monster, onReset }: BattleArenaProps) => {
               <Button 
                 onClick={attackMonster}
                 className="bg-amber-600 hover:bg-amber-700 text-white px-8"
+                disabled={!selectedAbility}
               >
-                Атаковать монстра
+                {selectedAbility 
+                  ? `Использовать ${selectedAbility.name}` 
+                  : 'Выберите способность'}
               </Button>
               <Button
                 onClick={onReset}
